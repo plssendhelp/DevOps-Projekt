@@ -1,0 +1,146 @@
+#cloud-config
+hostname: demo-vm
+manage_etc_hosts: true
+
+users:
+  - default
+  - name: devops
+    gecos: DevOps User
+    groups: [sudo]
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI5LS5aEccLFtutM1kbm/SR4nbrrWUiL7zL2beNme7lzP nik@windows
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - mysql-server
+  - python3
+  - python3-pip
+  - python3-venv
+  - wget
+
+write_files:
+  - path: /usr/local/bin/install-dependencies.sh
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -eux
+
+      echo "[*] Ensuring MySQL is running..."
+      systemctl enable mysql
+      systemctl start mysql
+
+      echo "[*] Creating MySQL database and user..."
+      mysql -u root <<EOF
+      CREATE DATABASE IF NOT EXISTS demo_app;
+      CREATE USER IF NOT EXISTS 'app-user'@'localhost' IDENTIFIED BY 'password';
+      GRANT ALL PRIVILEGES ON demo_app.* TO 'app-user'@'localhost';
+      FLUSH PRIVILEGES;
+      EOF
+
+      echo "[*] Creating demo app directory..."
+      mkdir -p /opt/demo-app
+      chown devops:devops /opt/demo-app
+
+      echo "[*] Writing app.py..."
+      cat > /opt/demo-app/app.py << 'EOF'
+      from flask import Flask
+      import mysql.connector
+
+      app = Flask(__name__)
+
+      DB_CONFIG = {
+          'host': 'localhost',
+          'user': 'app-user',
+          'password': 'password',
+          'database': 'demo_app'
+      }
+
+      def init_db():
+          conn = mysql.connector.connect(**DB_CONFIG)
+          cursor = conn.cursor()
+          cursor.execute('CREATE TABLE IF NOT EXISTS counter (id INT PRIMARY KEY, value INT)')
+          cursor.execute('SELECT COUNT(*) FROM counter')
+          if cursor.fetchone()[0] == 0:
+              cursor.execute('INSERT INTO counter (id, value) VALUES (1, 0)')
+              conn.commit()
+          cursor.close()
+          conn.close()
+
+      @app.route('/')
+      def index():
+          conn = mysql.connector.connect(**DB_CONFIG)
+          cursor = conn.cursor()
+          cursor.execute('SELECT value FROM counter WHERE id = 1')
+          count = cursor.fetchone()[0]
+          cursor.close()
+          conn.close()
+          
+          return f'''
+              <h1>Counter: {count}</h1>
+              <form action="/increment" method="post">
+                  <button type="submit">+1</button>
+              </form>
+          '''
+
+      @app.route('/increment', methods=['POST'])
+      def increment():
+          conn = mysql.connector.connect(**DB_CONFIG)
+          cursor = conn.cursor()
+          cursor.execute('UPDATE counter SET value = value + 1 WHERE id = 1')
+          conn.commit()
+          cursor.close()
+          conn.close()
+          return index()
+
+      if __name__ == '__main__':
+          init_db()
+          app.run(debug=True, host='0.0.0.0', port=8080)
+      EOF
+
+      echo "[*] Writing requirements.txt..."
+      cat > /opt/demo-app/requirements.txt << 'EOF'
+      Flask==3.0.0
+      mysql-connector-python==8.2.0
+      EOF
+
+      echo "[*] Creating Python virtualenv..."
+      python3 -m venv /opt/demo-app/venv
+      source /opt/demo-app/venv/bin/activate
+
+      echo "[*] Installing Python dependencies..."
+      pip install --upgrade pip
+      pip install -r /opt/demo-app/requirements.txt
+
+      echo "[*] Creating systemd service..."
+      cat > /etc/systemd/system/demoapp.service << 'EOF'
+      [Unit]
+      Description=Demo Flask app
+      After=network.target mysql.service
+
+      [Service]
+      User=devops
+      WorkingDirectory=/opt/demo-app
+      Environment="PATH=/opt/demo-app/venv/bin"
+      ExecStart=/opt/demo-app/venv/bin/python3 /opt/demo-app/app.py
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+      echo "[*] Enabling and starting service..."
+      systemctl daemon-reload
+      systemctl enable demoapp
+      systemctl start demoapp
+
+      echo "[*] Provisioning finished."
+
+runcmd:
+  - /usr/local/bin/install-dependencies.sh
+
+final_message: "Cloud-init finished. Flask+MySQL demo app running on port 8080."
