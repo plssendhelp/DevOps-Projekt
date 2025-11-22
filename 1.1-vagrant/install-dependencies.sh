@@ -126,12 +126,13 @@ sudo systemctl restart redis-server
 sudo systemctl enable redis-server
 
 # Obtain and renew a certificate for domain and let certbot auto-configure nginx
-sudo certbot --nginx --non-interactive --redirect --agree-tos \
-    -m "${email}" \
-    -d "${domain}" 
+#sudo certbot --nginx --non-interactive --redirect --agree-tos \
+#    -m "${email}" \
+#    -d "${domain}" 
 
 
 # Open ports
+sudo ufw allow 22
 sudo ufw allow 80
 sudo ufw allow 443
 sudo ufw --force enable
