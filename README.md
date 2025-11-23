@@ -39,6 +39,8 @@ $ vagrant up
 
 [![App preview](https://img.youtube.com/vi/nzVMxgF9prI/0.jpg)](https://youtu.be/nzVMxgF9prI)
 
+You can access our solution at http://devops-vm-28.lrk.si:8080
+
 # cloud-init
 TODO!
 

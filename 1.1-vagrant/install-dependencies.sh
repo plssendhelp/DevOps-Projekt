@@ -36,7 +36,6 @@ EOF
 # +------------------------------+
 # [Testing] check if the dir exists -> destory it
 if [ -d ${app_path} ]; then
-    echo "Removing for testing..."
     sudo rm -rf ${app_path}
 fi
 
@@ -70,7 +69,8 @@ User=root
 WorkingDirectory=${app_path}
 Environment="PATH=${app_path}/venv/bin"
 ExecStart=${app_path}/venv/bin/python3 ${app_path}/app.py
-Restart=always
+Restart=on-failure
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
