@@ -42,5 +42,73 @@ $ vagrant up
 You can access our solution at http://devops-vm-28.lrk.si:8080
 
 # cloud-init
-TODO!
+This project demonstrates an automated deployment of a simple Python web application
+using **Incus** containers, **cloud-init** provisioning, and **Nginx reverse proxy** on the host.
+The result is a fully working demo application accessible from the public domain:
+**https://devops-vm-39.lrk.si**
+
+How provisioning works:
+When creating the container:
+
+```
+incus launch images:ubuntu/22.04/cloud cloud-demo \
+  -c cloud-init.user-data="$(cat cloud-config.yaml)"
+```
+Cloud-init performs:
+### Package installation
+- python3, pip
+- mysql-server
+- nginx
+- redis-server
+
+### Creates application directory
+`/opt/devops-demo/demo-app/`
+
+### Writes files (app.py, requirements.txt, unit service)
+
+### Installs Python dependencies
+```
+pip install -r /opt/devops-demo/demo-app/requirements.txt
+```
+
+### Initializes database
+- creates DB `demo_app`
+- creates MySQL user
+- initializes table `counter`
+
+### Starts systemd service
+```
+systemctl enable flaskapp
+systemctl start flaskapp
+```
+Nginx reverse proxy (host → container)
+File: `/etc/nginx/sites-available/devops-demo`
+
+```
+server {
+    listen 80;
+    server_name devops-vm-39.lrk.si;
+
+    location / {
+        proxy_pass http://10.168.179.250:8080;  # container private IP
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+Enable site:
+
+```
+sudo ln -s /etc/nginx/sites-available/devops-demo /etc/nginx/sites-enabled/
+sudo systemctl restart nginx
+```
+
+## HTTPS with Let’s Encrypt
+```
+sudo certbot --nginx -d devops-vm-39.lrk.si
+```
+
+you can access the solution with: http://devops-vm-39.lrk.si/
 
