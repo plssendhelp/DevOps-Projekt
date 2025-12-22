@@ -2,6 +2,7 @@ from flask import Flask
 import mysql.connector
 import os
 import time
+import redis
 
 app = Flask(__name__)
 
@@ -11,6 +12,12 @@ DB_CONFIG = {
     'password': os.getenv('DB_PASSWORD', 'password'),
     'database': os.getenv('DB_NAME', 'demo_app')
 }
+
+redis_client = redis.Redis(
+    host=os.getenv("REDIS_HOST", "redis"),
+    port=6379,
+    decode_responses=True
+)
 
 def init_db():
     for i in range(10):
@@ -35,6 +42,8 @@ def init_db():
 
 @app.route('/')
 def index():
+    visits = redis_client.incr("visits")
+
     conn = mysql.connector.connect(**DB_CONFIG)
     cursor = conn.cursor()
     cursor.execute('SELECT value FROM counter WHERE id = 1')
@@ -44,6 +53,7 @@ def index():
     
     return f'''
         <h1>Counter: {count}</h1>
+        <h2>Visits: {visits}</h2>
         <form action="/increment" method="post">
             <button type="submit">+1</button>
         </form>
