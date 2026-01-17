@@ -52,7 +52,7 @@ def index():
     conn.close()
     
     return f'''
-        <h1>Counter: {count}</h1>
+        <h1>Counter: {count} (version 2) </h1>
         <h2>Visits: {visits}</h2>
         <form action="/increment" method="post">
             <button type="submit">+1</button>
